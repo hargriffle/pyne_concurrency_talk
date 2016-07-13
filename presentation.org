@@ -90,10 +90,9 @@ async def fib_handler(client):
 (See asyncio_fib_server.py)
 
 * async/await originally from c#
-  Coming to ES7
-  Already in Dart and Scala
-  ==> Python 3.5!
-
+- Python 3.5!  
+- Coming to ES7
+- Already in Dart and Scala
 
 
 * origin - network is slow:
@@ -111,35 +110,20 @@ From Fluent Python (buy this book):
    disk      | 41,000,000    |  1.3 years
    network   |  240,000,000  |  7.6 years
 
-* TODO sort this: some history
-  Dealing with concurrency in network programming: --> traditionally
-  we had Polling vs threads
-
-  (asyncio comes from the polling side of
-  things)
-
-  TODO Put in code snippet
-
-  There is a long, long history in Python, on the polling side:
+* some history
+** There is a long, long history in Python:
   Polling -> callbacks -> Futures, Deferreds -> Generators ->
   inlined callbacks -> coroutines -> yield from -> asyncio -> async/await.
 
   (And there's threads thrown in there too...)
 
-  Lots of frameworks too:
+** Lots of frameworks too:
   - Twisted
   - Tornado
   - Gevent
   - Stackless
   - asyncio
   - now in 3.5 async/await (curio, uvloop etc)
-
-  (The ideas is we're trying to get back to a simple model of
-  programming where the shape of the code is to look a bit like
-  thread programming - perhaps this is familiarity).
-
-  But perhaps we can skip straight to async/await? People don't want
-  to have to think about callbacks and futures, promises whatever...
 
 * what about threads?
   - Threads are good. Shared state... less so.
