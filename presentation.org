@@ -309,14 +309,16 @@ def fib_handler(client):
   - Essentially allow one to overcome blocking ... each client was
   given it's own thread and off it goes.
 
-  - But this does not probably scale ... one thread ~ 50k of memory, so if
+  - But this does not probably scale: one thread ~ 50k of memory, so if
   want 10k client connections 10k x 50k = 5E+8 bytes = 0.5
-  Gigabytes
+  Gigabytes; + all the processor overhead of dealing with that many
+  threads... 
 
   - let's investigate another way..
 
 * where are we blocking?
  - look at the server_0.0.py:
+#+BEGIN_SRC python
 def fib_server(address):
     <snip>
     while True:
@@ -333,11 +335,12 @@ def fib_handler(client):
         resp = str(fib(n)).encode('utf-8') + b'\n'
         client.send(resp) # BLOCKING I/O <--
     print("Closed connection to client")
-
+#+END_SRC
 
 
 * enter the event loop
   What we'd like:
+
   - A thingy-controller/manager/scheduler that runs our code by
     avoiding waiting on the blocking parts. The different bits of
     our code are called 'tasks'.
@@ -349,7 +352,7 @@ def fib_handler(client):
   - Periodically it will check to see if the blocking code has
     finished, if it has it adds it to the queue that can be run.
 
-  - (this is sort of how asyncio does it...)
+  - (this is sort of how asyncio does it... don't take this to seriously)
 
 * Let's make an Event loop class (server_0.4.py)
    --> Let's make a stub:
