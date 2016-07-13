@@ -154,6 +154,7 @@ From Fluent Python (buy this book):
 * concurrency vs parallelism
 
   - From Seven Concurrency Models in Seven Weeks:
+
     "Concurrency is about dealing with lots of things at once.
       Parallelism is about doing lots of things at once.
 
