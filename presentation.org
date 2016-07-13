@@ -1,51 +1,45 @@
 * TALK: Get (Con)current!
+** see https://github.com/hargriffle/pyne_concurrency_talk/
+
 * Motivation:
-   - I wanted to learn about concurrency in Python why because I was
-     trying to make an automated testing thing for testing my IoT
-     devices… these are connected by USB/FTDI cable … and it needs
-     to be able to send and receive messages at once and not miss
-     things … we want to test
-   - I also wanted to show that I could encourage others to just
-     pick a topic and research a bit about it and make a presentation
-   - I have done quite a lot of event driven programming (this tends
-     to be the model of programming for RTOS in embedded systems or
-     at least ones that are slightly more complex that flashing
-     LEDs… ) and parallel programming in the past
-   - bytes and stuff are a pain in Python 3 solves this. … Python 3
+   - I wanted to learn about concurrency in Python 
+
+   - encourage others to just pick a topic and explore (and then give
+     a talk :) ) 
+
    - Heard about asyncio and the new keywords and stuff in Python
-     3.5 coroutines all this stuff… super awesome…I have done some
-     Twisted stuff and it seems a bit
-   - Push vs pull - everything is going Reactive… Erik Meijer (One
-     Hacker Way)
-
-
+     3.5
+     
+   - everything is going async (push vs pull, reactive programming etc...)
 
 
 * asyncio - RTFM :
-  https://docs.python.org/3/library/asyncio.html:
-  "This module provides infrastructure for writing single-threaded
-  concurrent code using coroutines, multiplexing I/O access over
-  sockets and other resources, running network clients and servers,
-  and other related primitives. Here is a more detailed list of the
-  package contents:
-  - a pluggable event loop with various system-specific
+
+-  https://docs.python.org/3/library/asyncio.html:
+
+   "This module provides infrastructure for writing single-threaded
+   concurrent code using coroutines, multiplexing I/O access over
+   sockets and other resources, running network clients and servers,
+   and other related primitives. Here is a more detailed list of the
+   package contents:
+   - a pluggable event loop with various system-specific
     implementations;
-  - transport and protocol abstractions (similar to those in Twisted);
-  - concrete support for TCP, UDP, SSL, subprocess pipes, delayed
+   - transport and protocol abstractions (similar to those in Twisted);
+   - concrete support for TCP, UDP, SSL, subprocess pipes, delayed
      calls, and others (some may be system-dependent);
-  - a Future class that mimics the one in the concurrent.futures module,
-  but adapted for use with the event loop;
+   - a Future class that mimics the one in the concurrent.futures module,
+     but adapted for use with the event loop;
    - coroutines and tasks based on yield from (PEP 380), to help write
-  concurrent code in a sequential fashion;
-  - cancellation support for Futures and coroutines;
-  - synchronization primitives for use between coroutines in a single
-  thread, mimicking those in the threading module;
-  - an interface for passing work off to a threadpool, for times when you
-  absolutely, positively have to use a library that makes blocking I/O
-  calls."
+     concurrent code in a sequential fashion;
+   - cancellation support for Futures and coroutines;
+   - synchronization primitives for use between coroutines in a single
+     thread, mimicking those in the threading module;
+     - an interface for passing work off to a threadpool, for times when you
+       absolutely, positively have to use a library that makes blocking I/O
+     calls."
 
 * ...
-  AGGGHHHH WTF! Two many moving parts...
+  AGGGHHHH! 
 
 
 * @dabeaz to the rescue:
@@ -60,12 +54,10 @@
 
 * In this talk:
   This is a mashup for those two Beazley talks:
-
-  --> what's the shape of the code? <--
-  --> what's (sort of) going on under the hood <--
-  --> This is not exploring the full capabilities of python, asyncio
-  for concurrency <--
-  -->
+    - what's the shape of the code? 
+    - what's (sort of) going on under the hood
+    - This is not a full exploration 
+ 
 * where we are a headed (Here be dragons...)
 Check out the shiny new syntax -- async def and await ... ooohhh!
 #+BEGIN_SRC python
@@ -102,7 +94,7 @@ async def fib_handler(client):
   Already in Dart and Scala
   ==> Python 3.5!
 
-* TODO Contrast threads and event loops etc...
+
 
 * origin - network is slow:
 From Fluent Python (buy this book):
