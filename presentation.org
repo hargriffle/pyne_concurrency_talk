@@ -449,6 +449,7 @@ def fib_handler(client):
 
 
 * aside: generators
+#+BEGIN_SRC python
 >>> def countdown(n):
 ...     while n > 0:
 ...             yield n
@@ -482,7 +483,7 @@ Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
 StopIteration
 >>>
-
+#+END_SRC python
 - countdown, yield stops the execution and returns it to — see countdown --> in repl
 - yield makes the function stop until it is called next() -
 - why not use yield to give back control to avoid blocking?
