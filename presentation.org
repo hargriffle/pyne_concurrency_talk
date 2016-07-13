@@ -34,9 +34,9 @@
    - cancellation support for Futures and coroutines;
    - synchronization primitives for use between coroutines in a single
      thread, mimicking those in the threading module;
-     - an interface for passing work off to a threadpool, for times when you
-       absolutely, positively have to use a library that makes blocking I/O
-     calls."
+   - an interface for passing work off to a threadpool, for times when you
+     absolutely, positively have to use a library that makes
+     blocking I/O calls."
 
 * ...
   AGGGHHHH! 
