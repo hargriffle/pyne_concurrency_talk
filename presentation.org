@@ -429,13 +429,16 @@ def fib_handler(client):
 
 
 * let's create some tasks! (server_0.7.py)
-  - in fib_server():
+** in fib_server():
     wrap the call to fib_handler()
-    --> loop.create_task(fib_handler(client))
-
-  - and to run our server add fib_server as a task
+#+BEGIN_SRC python
+    loop.create_task(fib_handler(client))
+#+END_SRC python
+  
+** and to run our server add fib_server as a task
+#+BEGIN_SRC python
     loop.create_task(fib_server("", 25000))
-
+#+END_SRC python
   - check it runs
      --> --> still no concurrency...
 
@@ -443,9 +446,7 @@ def fib_handler(client):
 * why no concurrency??? boo hoo.
 
 - we know we want to be able to pause a task when it reaches a
-  blocking point..
-
---> --> what to do, what to do?
+  blocking point.. --> --> what to do, what to do?
 
 
 
@@ -485,27 +486,29 @@ Traceback (most recent call last):
 StopIteration
 >>>
 #+END_SRC python
-- countdown, yield stops the execution and returns it to — see countdown --> in repl
-- yield makes the function stop until it is called next() -
+
 - why not use yield to give back control to avoid blocking?
 
 
 * hmm how to use generators? (server_0.8.py)
-
-
 - Before every line where we think we might make a blocking
 call  we add a yield statement saying why and on what we might be
 waiting
 
 - in fib_handler():
+#+BEGIN_SRC python
   yield 'waiting_to_read', client
   req = loop.sock_recv(client, 100) # BLOCKING I/O
+#+END_SRC python
 
 - And in fib_server():
+#+BEGIN_SRC python
   yield 'waiting_to_write', client
   loop.sock_sendall(client, resp) # BLOCKING I/O
+#+END_SRC python
 
 - Now in the Loop class also:
+#+BEGIN_SRC python
     def sock_recv(self, sock, maxbytes):
         yield 'waiting_to_read', sock
         return sock.recv(maxbytes)
@@ -517,20 +520,21 @@ waiting
             yield 'waiting_to_write', sock
             nsent = sock.send(data)
             data = data[nsent:]
-
+#+END_SRC python
 
 -  So generators give us a way to run to a point in a code block (or
    function) and then return from there back to the calling point.
 
-    - And we have some code that at some point blocks. What is this
-   blocking again? Well, it means that we run some statement and the
-   statement will not complete until some external event has
-   completed.
+- And we have some code that at some point blocks. What is this
+  blocking again? Well, it means that we run some statement and the
+  statement will not complete until some external event has completed.
 
    For example, if we follow the execution flow of our server, the
    first blocking call is this line in fib_server():
 
+#+BEGIN_SRC python
    client, addr = loop.sock_accept(sock) # BLOCKING I/O
+#+END_SRC python
 
    Why is it blocking? Well because the server may be busy doing
    something else and won't return us a new client connection.
@@ -544,13 +548,16 @@ waiting
    waiting for.
 
    --> So add a yield statement, the line before it:
+
+#+BEGIN_SRC python
    yield 'waiting_to_accept', sock
    client, addr = loop.sock_accept(sock) # BLOCKING I/O
+#+END_SRC python
 
 * Our tasks are now generator functions --> use next() to run them! (server_0.9.py)
 
 ** So in run_forever() we can run the current task to the yield point:
-
+#+BEGIN_SRC python
            while self.ready:
                self.current_task = self.ready.popleft()
                # try to run current_task...
@@ -559,22 +566,28 @@ waiting
                    print('reason:', reason, 'sock:', sock)
                except StopIteration:
                    pass
+#+END_SRC python
+
 
 ** Now we need a way to figure out if the socket is ready to do
  whatever it is about to do. To do this we will use DefaultSelector:
+#+BEGIN_SRC python
+  # way of watching sockets for read and write signals... (~ os level
+  # polling of the registered sockets)
 
-  # way of watching sockets for read and write signals... (~ os level polling of the registered sockets)
   from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
+#+END_SRC python
 
  And then the loop needs a selector instance to use:
+#+BEGIN_SRC python
      def __init__(self):
        self.ready = deque()
        self.selector = DefaultSelector()
-
+#+END_SRC python
 
 ** Now we need to register our waiting task with this selector, so in
  run_forever():
-
+#+BEGIN_SRC python
          while self.ready:
                self.current_task = self.ready.popleft()
                # try to run current_task...
@@ -585,21 +598,21 @@ waiting
                        self.selector.register(sock, EVENT_READ, self.current_task)
                except StopIteration:
                    pass
-
+#+END_SRC python
 
 ** OK. Fine but how do we know when they are ready?
-    We can use the selector to find out what's ready....
+   We can use the selector to find out what's ready.
 
   Then when we have no ready tasks. Add to the while not self.ready
   loop:
-
+#+BEGIN_SRC python
   while not self.ready:
       events = self.selector.select()
       # add these events and unregister them from listened to:
       for key, _ in events:
          self.ready.append(key.data)
          self.selector.unregister(key.fileobj)
-
+#+END_SRC python
 -> So now if we run it we can connect a client, but it won't return us
   a number because we aren't dealing with it.
 
@@ -782,21 +795,25 @@ have finished running, then add them to the ready queue:
 
    - As we already saw a generator function
 
+#+BEGIN_SRC python
      def gen():
          yield 'something'
 
      g = gen()
      next(g)
+#+END_SRC python
+
    - a coroutine is very similar to a generator - it has a yield
      statement, but of the form
 
+#+BEGIN_SRC python
      data = yield
-
+#+END_SRC python
      Coroutines, like generators, use yield as a method of programme
      flow control. But they receive data through their .send method.
 
 Example coroutine 1:
-
+#+BEGIN_SRC python
 In [2]: def simple_coro():
             print("in coro")
             data = yield
@@ -840,7 +857,7 @@ StopIteration                             Traceback (most recent call
 last)
 <ipython-input-10-10afdef1e7e0> in <module>()
 ----> 1 c.send("blah")
-
+#+END_SRC python
 
 * aside 2 (continued) coroutines are generators
 
@@ -850,6 +867,7 @@ last)
 
  - Example 2: running_averager:
 
+#+BEGIN_SRC python
 In [11]: def running_averager():
    ....:     total = 0.0
    ....:     count = 0
@@ -886,9 +904,10 @@ TypeError                                 Traceback (most recent call
 last)
 <ipython-input-29-f77ab6b1c69b> in <module>()
 ----> 1 averager.send(None)
-
+#+END_SRC python
 
 * aside 2 (continued 2) coroutines / generators: getting a return value
+#+BEGIN_SRC python
 In [31]: def running_averager():
    ....:     total = 0.0
    ....:     count = 0
@@ -917,6 +936,7 @@ In [54]: try:
 
 In [55]: result
 Out[55]: (3.0, 5)
+#+END_SRC python
 
  - that seems a bit crap - having to smuggle the return result out in the
    exception...
@@ -930,6 +950,7 @@ Out[55]: (3.0, 5)
      completely new syntax - so reused two existing words
 
    - yield from with iterators - useful for chaining iterators
+#+BEGIN_SRC python
 In [1]: def simple_yield_from():
    ...:     yield from 'abc'
    ...:     yield from range(4)
@@ -937,9 +958,10 @@ In [1]: def simple_yield_from():
 
 In [2]: list(simple_yield_from())
 Out[2]: ['a', 'b', 'c', 0, 1, 2, 3]
-
+#+END_SRC python
 
 * aside 2 (cont. 4) coroutines: yield from for delegation
+#+BEGIN_SRC python
 In [171]: def delegator():
              final_result = yield from running_averager()
              print('final result' ,final_result)
@@ -965,7 +987,7 @@ StopIteration                             Traceback (most recent call
 last)
 <ipython-input-178-8078465fdceb> in <module>()
 ----> 1 delboy.send(None)
-
+#+END_SRC python
 
 
 
@@ -992,40 +1014,46 @@ last)
 
   - for example:
 
+#+BEGIN_SRC python
   def fib_server(address):
      <snip>
      while True:
          client, addr = yield from loop.sock_accept(sock) # BLOCKING I/O
          <snip>
-  - and:
+#+END_SRC python
 
+  - and:
+#+BEGIN_SRC python
    def sock_accept(self, sock):
        # wait to read/hear from the socket
        yield 'waiting_to_accept', sock
        return sock.accept()
-
+#+END_SRC python
    - be careful not to mix up 'client' and 'sock' variables
 
 ** don't forget about the future:
-
+#+BEGIN_SRC python
      result = yield from future # <-- !!!
-
+#+END_SRC python
 ** now try it... what happens?
          (problem with future... boo hoo)
 
 
 * (server_1.4.py) fixing the future:
   - wrap the future with a coroutine:
-
+#+BEGIN_SRC python
   from types import coroutine
 
   @coroutine
   def future_wait(future):
      yield 'waiting_for_future', future
      return future.result()
+#+END_SRC python
 
   - and
+#+BEGIN_SRC python
     result = yield from future_wait(future)
+#+END_SRC python
 
   - try does it work... ?
      well ish -- seems a bit buggy to me -->
@@ -1037,6 +1065,7 @@ last)
 * (server_1.5.py) -- more coroutines:
  - make coroutines for each of the yield statements that we have:
 
+#+BEGIN_SRC python
 @coroutine
 def write_wait(sock):
     yield 'waiting_to_write', sock
@@ -1046,15 +1075,16 @@ def accept_wait(sock):
 @coroutine
 def read_wait(sock):
     yield 'waiting_to_read', sock
+#+END_SRC python
 
 - and then in the loop methods change the yield statements to yield
   from s these new coroutines, e.g.:
-
+#+BEGIN_SRC python
       def sock_recv(self, sock, maxbytes):
           # wait to read from the socket
           yield from read_wait(sock)
           return sock.recv(maxbytes)
-
+#+END_SRC python
 - this is still a bit buggy... ... but mostly it works on my
   machine...
 
@@ -1075,9 +1105,11 @@ def read_wait(sock):
 * (server_1.7.py) asyncio
 
   - add this:
+#+BEGIN_SRC python
   import asyncio
   # loop = Loop()
   loop = asyncio.get_event_loop()
+#+END _SRC python
 
   - remove / comment out the Loop class and the helper coroutine
     functions.
@@ -1086,8 +1118,6 @@ def read_wait(sock):
 
   - our (buggy) event loop is faster than asyncio (1300 cf 1000
     req/sec)!
-
-
 
 * conclusions
   - thanks for staying the course!!!!! --> hope I have encouraged you
