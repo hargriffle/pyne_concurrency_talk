@@ -1,0 +1,1134 @@
+* TALK: Get (Con)current!
+* Motivation:
+   - I wanted to learn about concurrency in Python why because I was
+     trying to make an automated testing thing for testing my IoT
+     devices… these are connected by USB/FTDI cable … and it needs
+     to be able to send and receive messages at once and not miss
+     things … we want to test
+   - I also wanted to show that I could encourage others to just
+     pick a topic and research a bit about it and make a presentation
+   - I have done quite a lot of event driven programming (this tends
+     to be the model of programming for RTOS in embedded systems or
+     at least ones that are slightly more complex that flashing
+     LEDs… ) and parallel programming in the past
+   - bytes and stuff are a pain in Python 3 solves this. … Python 3
+   - Heard about asyncio and the new keywords and stuff in Python
+     3.5 coroutines all this stuff… super awesome…I have done some
+     Twisted stuff and it seems a bit
+   - Push vs pull - everything is going Reactive… Erik Meijer (One
+     Hacker Way)
+
+
+
+
+* asyncio - RTFM :
+  https://docs.python.org/3/library/asyncio.html:
+  "This module provides infrastructure for writing single-threaded
+  concurrent code using coroutines, multiplexing I/O access over
+  sockets and other resources, running network clients and servers,
+  and other related primitives. Here is a more detailed list of the
+  package contents:
+  - a pluggable event loop with various system-specific
+    implementations;
+  - transport and protocol abstractions (similar to those in Twisted);
+  - concrete support for TCP, UDP, SSL, subprocess pipes, delayed
+     calls, and others (some may be system-dependent);
+  - a Future class that mimics the one in the concurrent.futures module,
+  but adapted for use with the event loop;
+   - coroutines and tasks based on yield from (PEP 380), to help write
+  concurrent code in a sequential fashion;
+  - cancellation support for Futures and coroutines;
+  - synchronization primitives for use between coroutines in a single
+  thread, mimicking those in the threading module;
+  - an interface for passing work off to a threadpool, for times when you
+  absolutely, positively have to use a library that makes blocking I/O
+  calls."
+
+* ...
+  AGGGHHHH WTF! Two many moving parts...
+
+
+* @dabeaz to the rescue:
+
+  - David Beazley - Python Concurrency From the Ground Up: LIVE! -
+    PyCon 2015
+    https://www.youtube.com/watch?v=MCs5OvhV9S4
+
+  - David Beazley - Keynote at PyCon Brasil 2015 (Screencast)
+    https://www.youtube.com/watch?v=lYe8W04ERnY
+
+
+* In this talk:
+  This is a mashup for those two Beazley talks:
+
+  --> what's the shape of the code? <--
+  --> what's (sort of) going on under the hood <--
+  --> This is not exploring the full capabilities of python, asyncio
+  for concurrency <--
+  -->
+* where we are a headed (Here be dragons...)
+Check out the shiny new syntax -- async def and await ... ooohhh!
+#+BEGIN_SRC python
+loop = asyncio.get_event_loop()
+
+async def fib_server(address):
+    sock = socket(AF_INET, SOCK_STREAM)
+    sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    sock.bind(address)
+    sock.listen(5)
+    sock.setblocking(False)
+    while True:
+        client, addr = await loop.sock_accept(sock)
+        print("Connection from", addr)
+        loop.create_task(fib_handler(client))
+
+async def fib_handler(client):
+    with client:
+        while True:
+            req = await loop.sock_recv(client, 100)
+            if not req:
+                break
+            n = int(req)
+            future = loop.run_in_executor(pool, fib, n)
+            result = await future
+            resp = str(result).encode('utf-8') + b'\n'
+            await loop.sock_sendall(client, resp)
+    print("Connection closed to", client)
+#+END_SRC
+(See asyncio_fib_server.py)
+
+* async/await originally from c#
+  Coming to ES7
+  Already in Dart and Scala
+  ==> Python 3.5!
+
+* TODO Contrast threads and event loops etc...
+
+* origin - network is slow:
+From Fluent Python (buy this book):
+
+   Table 18-1. Modern computer latency for reading data from different
+   devices; third column shows proportional times in a scale easier to
+   understand for us slow humans:
+
+   Device    | CPU cycles    | Proportional “human” scale
+   -----------------------------------------------------
+   L1 cache  |  3            |   3 seconds
+   L2 cache  |  14           |  14 seconds
+   RAM       |  250          |  250 seconds
+   disk      | 41,000,000    |  1.3 years
+   network   |  240,000,000  |  7.6 years
+
+* TODO sort this: some history
+  Dealing with concurrency in network programming: --> traditionally
+  we had Polling vs threads
+
+  (asyncio comes from the polling side of
+  things)
+
+  TODO Put in code snippet
+
+  There is a long, long history in Python, on the polling side:
+  Polling -> callbacks -> Futures, Deferreds -> Generators ->
+  inlined callbacks -> coroutines -> yield from -> asyncio -> async/await.
+
+  (And there's threads thrown in there too...)
+
+  Lots of frameworks too:
+  - Twisted
+  - Tornado
+  - Gevent
+  - Stackless
+  - asyncio
+  - now in 3.5 async/await (curio, uvloop etc)
+
+  (The ideas is we're trying to get back to a simple model of
+  programming where the shape of the code is to look a bit like
+  thread programming - perhaps this is familiarity).
+
+  But perhaps we can skip straight to async/await? People don't want
+  to have to think about callbacks and futures, promises whatever...
+
+* what about threads?
+  - Threads are good. Shared state... less so.
+    --> Allen B. Downey's Little book of Semaphores
+       http://greenteapress.com/wp/semaphores/
+  - n instructions --> n^n different orders of execution...
+    -->--> literally "exponentially more difficult to reason about"
+  - locks, mutexes(???mutices???), critical sections, deadlocks, DEADLOCKS!!!!
+  - dining Philosophers... argggghHHH!
+  - GIL - Global interpreter lock (CPython)
+    -- the python interpreter prevents more than one thread
+    executing python bytecode at the same time (helps with memory
+    management and GC)
+    -- NB these are os threads (they take up memory and have os
+    signals and operations etc) but they need the GIL to run.
+  - Even more further reading: Glyph of Twisted fame:
+     https://glyph.twistedmatrix.com/2014/02/unyielding.html
+
+
+* asyncio is a library (formerly Tulip or Trollius)
+- asyncio, a package that implements concurrency with coroutines driven
+   by an event loop
+
+- "If you need to write a program that manages 10000 concurrent
+  connections, then asyncio is your problem" - dabeaz
+
+
+* concurrency vs parallelism
+
+  - From Seven Concurrency Models in Seven Weeks:
+    "Concurrency is about dealing with lots of things at once.
+      Parallelism is about doing lots of things at once.
+
+      Not the same, but related.
+
+      One is about structure, one is about execution.
+
+      Concurrency provides a way to structure a solution to solve a problem
+      that may (but not necessarily) be parallelizable.[157]"
+
+ — Rob Pike (Co-inventor of the Go language)
+
+
+* So we need a problem
+  Let's make a really bad Fibonacci micro service!
+
+  fib.py:
+ #+BEGIN_SRC python
+  def fib(n):
+   if n <= 2:
+       return 1
+   else:
+       return fib(n-1) + fib(n-2)
+ #+END_SRC python
+
+  --> Check it works
+
+* server_0.0.py:
+#+BEGIN_SRC python
+from socket import * # PEP8 eat your heart out
+from fib import fib
+
+def fib_server(address):
+    sock = socket(AF_INET, SOCK_STREAM)     # TCP socket
+    sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    sock.bind(address)
+    sock.listen(5)
+    print("Running fib_server. Yay!")
+    while True:
+        client, addr = sock.accept()
+        print("Connection to client at address: ", addr)
+        fib_handler(client)
+
+def fib_handler(client):
+    while True:
+        req = client.recv(100)
+        if not req:
+            break
+        n = int(req)
+        resp = str(fib(n)).encode('utf-8') + b'\n'
+        client.send(resp)
+    print("Closed connection to client")
+
+fib_server(("", 25000))
+#+END_SRC python
+
+--> run it!
+(--> nc localhost 25000)
+
+** Socket programming primer
+   - JUST used TCP - SOCK_STREAM
+
+    - TCP:  Unless a connection dies or freezes because of a network
+      problem, TCP guarantees that the data stream will arrive
+      intact, without any information lost, duplicated, or out of
+      order.
+
+    - Just think of TCP as a giving us a pipe with which send and
+      receive data from two processes over a network. Most stuff,
+      including fancying messaging queue stuff is built upon TCP IRC
+      etc Facebook messenger but the important thing is that it is
+      bi-directional and guarantees that the data will get through
+   - READ: Brandon Rhodes, John Goerzen - Foundations of Python Network Programming
+
+* client.py
+#+BEGIN_SRC python
+from socket import *
+
+def fib_client(host, port):
+    sock = socket(AF_INET, SOCK_STREAM)
+    sock.connect((host, port))
+    print("client has made connection to %s on %d".format(host, port))
+    while True:
+        n = int(input("Which fibonaci number would you like? "))
+        sock.sendall(str(n).encode('utf-8'))
+        reply = sock.recv(100)
+        print("Your fib number is " + reply.decode('utf-8'))
+
+    sock.close()
+
+fib_client("", 25000)
+#+END_SRC python
+   --> try connecting two clients
+
+* so let's add some threads! (server_0.1.py)
+
+#+BEGIN_SRC python
+from threading import Thread
+
+def fib_server(address):
+    <snip>
+    print("Running fib_server with THREADS! ") # CHANGED
+    while True:
+        client, addr = sock.accept()
+        print("Connection to client at address: ", addr)
+        Thread(target=fib_handler, args=(client,), daemon=True).start() # NEW LINE
+#+END_SRC
+
+--> try running it, and try two clients now.
+
+* measure time of a long running request  (perf1.py)
+  --> run two lots of the scripts and see that the response doubles
+    in time - this is because the GIL pins you to one core
+
+* measure number of short req per sec (perf2.py)
+   --> run perf2.py and open a client and make a long running
+   request (say, calc the fib of 40)
+
+- there's  another facet that is interesting:  so we see
+ the short running requests go off a cliff.
+
+  The GIL seems to prioritise CPU intensive - but actually it is just
+  blocking everything else until it finishes...
+
+* farm out the calc task (server_0.2.py)
+   - we're going to farm out the task tot a process pool:
+#+BEGIN_SRC python
+from concurrent.futures import ProcessPoolExecutor as Pool
+pool = Pool(4)
+
+def fib_handler(client):
+    while True:
+        req = client.recv(100)
+        if not req:
+            break
+        n = int(req)
+        future = pool.submit(fib, n) # NEW LINE
+        result = future.result() # NEW LINE
+        resp = str(result).encode('utf-8') + b'\n' # CHANGE
+        client.send(resp)
+    print("Closed connection to client")
+#+END_SRC
+
+   --> now let's try perf2.py again and a long running client request
+
+   --> --> So our overall number of requests has taken a hit because
+   of the overhead of the process pool bit, but we don't get a
+   massive performance hit when we run a long running process now.
+
+
+
+* what were threads giving me?
+  - Essentially allow one to overcome blocking ... each client was
+  given it's own thread and off it goes.
+
+  - But this does not probably scale ... one thread ~ 50k of memory, so if
+  want 10k client connections 10k x 50k = 5E+8 bytes = 0.5
+  Gigabytes
+
+  - let's investigate another way..
+
+* where are we blocking?
+ - look at the server_0.0.py:
+def fib_server(address):
+    <snip>
+    while True:
+        client, addr = sock.accept() # BLOCKING I/O <--
+        print("Connection to client at address: ", addr)
+        fib_handler(client)
+
+def fib_handler(client):
+    while True:
+        req = client.recv(100) # BLOCKING I/O <--
+        if not req:
+            break
+        n = int(req)
+        resp = str(fib(n)).encode('utf-8') + b'\n'
+        client.send(resp) # BLOCKING I/O <--
+    print("Closed connection to client")
+
+
+
+* enter the event loop
+  What we'd like:
+  - A thingy-controller/manager/scheduler that runs our code by
+    avoiding waiting on the blocking parts. The different bits of
+    our code are called 'tasks'.
+
+  - When it hits a blocking part in a task, it pauses the code there and add
+    it's to the 'waiting queue',  and then tries to run some other non-blocking
+    code (from the 'ready to run queue').
+
+  - Periodically it will check to see if the blocking code has
+    finished, if it has it adds it to the queue that can be run.
+
+  - (this is sort of how asyncio does it...)
+
+* Let's make an Event loop class (server_0.4.py)
+   --> Let's make a stub:
+
+#+BEGIN_SRC python
+from collections import deque
+class Loop:
+    def __init__(self):
+        self.ready = deque()
+
+    def create_task(self, task):
+        self.ready.append(task)
+
+    def run_forever(self):
+        while True:
+            while not self.ready:
+                # hmmn, nothing to run -> must be waiting on stuff...
+                pass
+            while self.ready:
+                self.current_task = self.ready.popleft()
+                # try to run current_task...
+#+END_SRC
+
+* but what are the tasks? (server_0.5.py)
+   - looking at fib_server() and fib_handler() it's all to do with
+     waiting to read or write to sockets
+   --> so let's add some socket methods to our event loop class:
+
+#+BEGIN_SRC python
+   def sock_recv(self, sock, maxbytes):
+        # wait to read from the socket
+        return sock.recv(maxbytes)
+    def sock_accept(self, sock):
+        # wait to read/hear from the socket
+        return sock.accept()
+    def sock_sendall(self, sock, data):
+        while data:
+            # wait to be able to write to the socket
+            nsent = sock.send(data)
+            data = data[nsent:]
+#+END_SRC
+
+* change fib_server to use our socket methods (server_0.6.py)
+
+#+BEGIN_SRC Python
+loop = Loop()
+def fib_server(address):
+    sock = socket(AF_INET, SOCK_STREAM)     # TCP socket
+    sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    sock.bind(address)
+    sock.listen(5)
+    print("Running fib_server. Yay!")
+    while True:
+        client, addr = loop.sock_accept(sock) # BLOCKING I/O
+        print("Connection to client at address: ", addr)
+        fib_handler(client)
+
+def fib_handler(client):
+    while True:
+        req = loop.sock_recv(client, 100) # BLOCKING I/O
+        if not req:
+            break
+        n = int(req)
+        resp = str(fib(n)).encode('utf-8') + b'\n'
+        loop.sock_sendall(client, resp) # BLOCKING I/O
+    print("Closed connection to client")
+#+END_SRC
+- run it...
+   --> works with one client but not two....
+   --> we're just using the loop's socket methods nothing more...
+   --> --> we're not adding any tasks to our event loop and we're not
+   running our loop yet either...
+
+
+* let's create some tasks! (server_0.7.py)
+  - in fib_server():
+    wrap the call to fib_handler()
+    --> loop.create_task(fib_handler(client))
+
+  - and to run our server add fib_server as a task
+    loop.create_task(fib_server("", 25000))
+
+  - check it runs
+     --> --> still no concurrency...
+
+
+* why no concurrency??? boo hoo.
+
+- we know we want to be able to pause a task when it reaches a
+  blocking point..
+
+--> --> what to do, what to do?
+
+
+
+* aside: generators
+>>> def countdown(n):
+...     while n > 0:
+...             yield n
+...             n -= 1
+...
+>>> f = countdown(5)
+>>> f
+<generator object countdown at 0x1019fc0f8>
+>>> for i in f:
+...     print(i)
+...
+5
+4
+3
+2
+1
+
+>>> f = countdown(5)
+>>> next(f)
+5
+>>> next(f)
+4
+>>> next(f)
+3
+>>> next(f)
+2
+>>> next(f)
+1
+>>> next(f)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+StopIteration
+>>>
+
+- countdown, yield stops the execution and returns it to — see countdown --> in repl
+- yield makes the function stop until it is called next() -
+- why not use yield to give back control to avoid blocking?
+
+
+* hmm how to use generators? (server_0.8.py)
+
+
+- Before every line where we think we might make a blocking
+call  we add a yield statement saying why and on what we might be
+waiting
+
+- in fib_handler():
+  yield 'waiting_to_read', client
+  req = loop.sock_recv(client, 100) # BLOCKING I/O
+
+- And in fib_server():
+  yield 'waiting_to_write', client
+  loop.sock_sendall(client, resp) # BLOCKING I/O
+
+- Now in the Loop class also:
+    def sock_recv(self, sock, maxbytes):
+        yield 'waiting_to_read', sock
+        return sock.recv(maxbytes)
+    def sock_accept(self, sock):
+        yield 'waiting_to_accept', sock
+        return sock.accept()
+    def sock_sendall(self, sock, data):
+        while data:
+            yield 'waiting_to_write', sock
+            nsent = sock.send(data)
+            data = data[nsent:]
+
+
+-  So generators give us a way to run to a point in a code block (or
+   function) and then return from there back to the calling point.
+
+    - And we have some code that at some point blocks. What is this
+   blocking again? Well, it means that we run some statement and the
+   statement will not complete until some external event has
+   completed.
+
+   For example, if we follow the execution flow of our server, the
+   first blocking call is this line in fib_server():
+
+   client, addr = loop.sock_accept(sock) # BLOCKING I/O
+
+   Why is it blocking? Well because the server may be busy doing
+   something else and won't return us a new client connection.
+
+   The idea here is that we want to pause before we run this line,
+   making sure that we can make that request and it will return
+   immediately.
+
+   --> we can use the yield statement as a way of transferring back just
+   before we do a blocking call and telling us why and what we're
+   waiting for.
+
+   --> So add a yield statement, the line before it:
+   yield 'waiting_to_accept', sock
+   client, addr = loop.sock_accept(sock) # BLOCKING I/O
+
+* Our tasks are now generator functions --> use next() to run them! (server_0.9.py)
+
+** So in run_forever() we can run the current task to the yield point:
+
+           while self.ready:
+               self.current_task = self.ready.popleft()
+               # try to run current_task...
+               try:
+                   reason, sock = next(self.current_task) # <--- <--
+                   print('reason:', reason, 'sock:', sock)
+               except StopIteration:
+                   pass
+
+** Now we need a way to figure out if the socket is ready to do
+ whatever it is about to do. To do this we will use DefaultSelector:
+
+  # way of watching sockets for read and write signals... (~ os level polling of the registered sockets)
+  from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
+
+ And then the loop needs a selector instance to use:
+     def __init__(self):
+       self.ready = deque()
+       self.selector = DefaultSelector()
+
+
+** Now we need to register our waiting task with this selector, so in
+ run_forever():
+
+         while self.ready:
+               self.current_task = self.ready.popleft()
+               # try to run current_task...
+               try:
+                   reason, sock = next(self.current_task)
+                   print('reason:', reason, 'sock:', sock)
+                   if reason == 'waiting_to_accept':
+                       self.selector.register(sock, EVENT_READ, self.current_task)
+               except StopIteration:
+                   pass
+
+
+** OK. Fine but how do we know when they are ready?
+    We can use the selector to find out what's ready....
+
+  Then when we have no ready tasks. Add to the while not self.ready
+  loop:
+
+  while not self.ready:
+      events = self.selector.select()
+      # add these events and unregister them from listened to:
+      for key, _ in events:
+         self.ready.append(key.data)
+         self.selector.unregister(key.fileobj)
+
+-> So now if we run it we can connect a client, but it won't return us
+  a number because we aren't dealing with it.
+
+
+* Now I need to deal with all the blocking bits of code... (server_1.0.py)
+** So the next blocking call is in fib_handler():
+
+#+BEGIN_SRC Python
+def fib_handler(client):
+    while True:
+        yield 'waiting_to_read', client # <-- deal with this!
+        req = loop.sock_recv(client, 100) # BLOCKING I/O
+        if not req:
+            break
+        n = int(req)
+        resp = str(fib(n)).encode('utf-8') + b'\n'
+        yield 'waiting_to_write', client # <-- and deal with this!
+        loop.sock_sendall(client, resp) # BLOCKING I/O
+    print("Closed connection to client")
+#+END_SRC Python
+
+** processing 'waiting_to_read' and 'waiting_to_write'
+   In the ready to run loop by registering them
+   with the selector:
+#+BEGIN_SRC Python
+                    reason, sock = next(self.current_task)
+                    if reason == 'waiting_to_accept':
+                        # need to register this with the selector
+                        self.selector.register(sock, EVENT_READ, self.current_task)
+                    elif reason == 'waiting_to_read':
+                        self.selector.register(sock, EVENT_READ, self.current_task)
+                    elif reason == 'waiting_to_write':
+                        self.selector.register(sock, EVENT_WRITE, self.current_task)
+                    else:
+                        raise RuntimeError('Something bad happened... er.')
+#+END_SRC Python
+
+** try running it
+   So now we need to deal with these when they're ready to run. So
+   run a client.py.
+   Try perf2.
+
+   --> So long running bits are still
+   blocking. So we need to farm processes out to a process pool.
+
+
+
+
+
+
+* bring back a process pool (server_1.1.py)
+** So we need to use a process pool:
+    Make the call to fib() in fib_handler() run in a process
+    pool. Change this:
+#+BEGIN_SRC python
+   resp = str(fib(n)).encode('utf-8') + b'\n'
+#+END_SRC python
+
+   To:
+#+BEGIN_SRC python
+   future = loop.run_in_executor(pool, fib, n)
+   yield 'waiting_for_future', future
+   result = future
+   resp = str(result).encode('utf-8') + b'\n'
+#+END_SRC python
+
+**  import and create a process pool:
+#+BEGIN_SRC python
+     from concurrent.futures import ProcessPoolExecutor as Pool
+     pool = Pool(4)
+#+END_SRC python
+
+**  run_in_executor() in loop:
+#+BEGIN_SRC python
+     def run_in_executor(self, executor, func, *args):
+        return executor.submit(func, *args)
+#+END_SRC python
+** In init need to add a dict for storing the futures and their
+     tasks:
+
+#+BEGIN_SRC python
+     self.futures = {}
+#+END_SRC python
+
+** register all the different reasons for yielding:
+In the while self.ready: loop we have to add the future
+and the task to the self.futures dict: (NB Changed sock to what)
+
+#+BEGIN_SRC python
+     # run task to next yield point
+     reason, what = next(self.current_task) #<-- <-- sock -> what
+     if reason == 'waiting_to_accept':
+        self.selector.register(what, EVENT_READ, self.current_task)
+     elif reason == 'waiting_to_read':
+        self.selector.register(what, EVENT_READ, self.current_task)
+     elif reason == 'waiting_to_write':
+         self.selector.register(what, EVENT_WRITE, self.current_task)
+     elif reason == 'waiting_for_future':
+         self.futures[what] = self.current_task
+#+END_SRC python
+
+** Has the future completed???
+    Now we need a way of figuring out if a future has completed. Luckily
+   concurrent.futures provides the as_completed() function. Import
+   this:
+
+   #+BEGIN_SRC python
+   from concurrent.futures import as_completed
+   #+END_SRC python
+
+At the top of the while not self.ready loop need to see what futures
+have finished running, then add them to the ready queue:
+
+#+BEGIN_SRC python
+            while not self.ready:
+                completed_futures = [future for future in self.futures if not future.running()]
+                for future in completed_futures:
+                    self.ready.append(self.futures.pop(future))
+#+END_SRC python
+
+
+** Now try running it:
+ - Now try running it using the client. Hmmn it is not
+   responding.
+
+ - Now try running another client. It turns out it
+   responds.
+
+* (server_1.2.py) Blocking, blocking everywhere.
+
+- So it turns out the select() call in the polling for sockets and
+  future loop is blocking. So even if the future has finished
+  (i.e. the result has been calculated by the remote process) we're
+  blocked until a socket is ready...
+
+- Luckily we can make select non-blocking by setting it's timeout
+  value to be negative. This means that it only returns sockets that
+  have notified the selector since the last call, there's no waiting:
+
+#+BEGIN_SRC python
+  events = self.selector.select(-1)
+#+END_SRC python
+
+- now try it. Check it 1200 requests per second and no massive drop
+  off on long running calculations.
+
+
+* RECAP: Where are we now? still no async/await
+ - So we have a fully functioning event loop that uses generators to
+   give us flow control.
+
+ - At every point we think that the task may have to wait (be that IO
+   or long running computation) we have a yield that gives the control
+   back to the event loop
+
+ - But still no async / await :-(
+
+
+* Now a small matter of some syntax
+  - So we want these nice async/await statements that appear in
+    asyncio_fib_server.py.
+
+  - looking at the fib_server() and fib_handler functions there are explicit yield lines
+    before the blocking lines of code. NB the blocking lines of code
+    are all calls on the Loop's methods. Can we encapsulate the
+    yield lines into the Loop methods?
+
+  - Yes, we can. But first we need to learn about generator
+    delegation.
+
+
+* aside 2: generators and coroutines
+   -  functions/generator functions/coroutines
+     I don't care what the proper CS definition of coroutines is. I
+     am taking the evolutionary definition from the Fluent Python
+     book. There are functions, generator functions and coroutines.
+
+   - Coroutines evolved from generator functions (And they can also
+     themselves be generator functions...)
+
+   - As we already saw a generator function
+
+     def gen():
+         yield 'something'
+
+     g = gen()
+     next(g)
+   - a coroutine is very similar to a generator - it has a yield
+     statement, but of the form
+
+     data = yield
+
+     Coroutines, like generators, use yield as a method of programme
+     flow control. But they receive data through their .send method.
+
+Example coroutine 1:
+
+In [2]: def simple_coro():
+            print("in coro")
+            data = yield
+            print("data:", data)
+
+In [3]: c = simple_coro()
+In [4]: c
+Out[4]: <generator object simple_coro at 0x1039f0db0>
+
+In [5]: next(c) # have to "prime" coroutines
+in coro
+
+In [6]: c.send('blah')
+data: blah
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call
+last)
+<ipython-input-6-4a15e473ba32> in <module>()
+----> 1 c.send('blah')
+
+StopIteration:
+
+In [7]: c = simple_coro()
+
+In [8]: c.send("blah")
+---------------------------------------------------------------------------
+TypeError                                 Traceback (most recent call
+last)
+<ipython-input-8-10afdef1e7e0> in <module>()
+----> 1 c.send("blah")
+
+TypeError: can't send non-None value to a just-started generator
+
+In [9]: c.send(None)
+in coro
+
+In [10]: c.send("blah")
+data: blah
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call
+last)
+<ipython-input-10-10afdef1e7e0> in <module>()
+----> 1 c.send("blah")
+
+
+* aside 2 (continued) coroutines are generators
+
+   - Coroutines, as well as receive values, they can yield them and
+     return them. NB In the above example the coroutine is in fact
+     generating a None value.
+
+ - Example 2: running_averager:
+
+In [11]: def running_averager():
+   ....:     total = 0.0
+   ....:     count = 0
+   ....:     average = None
+   ....:     while True:
+   ....:         val = yield average
+   ....:         total += val
+   ....:         count += 1
+   ....:         average = total / count
+   ....:
+
+In [16]: from inspect import getgeneratorstate
+In [18]: averager = running_averager()
+In [19]: getgeneratorstate(averager)
+Out[19]: 'GEN_CREATED'
+In [20]: next(averager)
+In [21]: getgeneratorstate(averager)
+Out[21]: 'GEN_SUSPENDED'
+In [23]: averager.send(1)
+Out[23]: 1.0
+In [24]: averager.send(2)
+Out[24]: 1.5
+In [25]: averager.send(3)
+Out[25]: 2.0
+In [26]: averager.send(4)
+Out[26]: 2.5
+In [27]: averager.send(5)
+Out[27]: 3.0
+In [28]: getgeneratorstate(averager)
+Out[28]: 'GEN_SUSPENDED'
+In [29]: averager.send(None)
+---------------------------------------------------------------------------
+TypeError                                 Traceback (most recent call
+last)
+<ipython-input-29-f77ab6b1c69b> in <module>()
+----> 1 averager.send(None)
+
+
+* aside 2 (continued 2) coroutines / generators: getting a return value
+In [31]: def running_averager():
+   ....:     total = 0.0
+   ....:     count = 0
+   ....:     average = None
+   ....:     while True:
+   ....:         val = yield average
+   ....:         if val is None:
+   ....:             break
+   ....:         total += val
+   ....:         count += 1
+   ....:         average = total / count
+   ....:     return average, count
+   ....:
+In [32]: averager = running_averager()
+
+In [33]: averager.send(None)
+
+In [35]: for i in range(1, 6):
+   ....:     averager.send(i)
+
+In [54]: try:
+            averager.send(None)
+         except StopIteration as err:
+             result = err.value
+             ....:
+
+In [55]: result
+Out[55]: (3.0, 5)
+
+ - that seems a bit crap - having to smuggle the return result out in the
+   exception...
+
+
+* aside 2 (continued 3) coroutines: chaining iterators with yield from
+
+   - as of Python 3.3 'yield from' introduced
+
+   - should have been 'await' but it was harder to introduce
+     completely new syntax - so reused two existing words
+
+   - yield from with iterators - useful for chaining iterators
+In [1]: def simple_yield_from():
+   ...:     yield from 'abc'
+   ...:     yield from range(4)
+   ...:
+
+In [2]: list(simple_yield_from())
+Out[2]: ['a', 'b', 'c', 0, 1, 2, 3]
+
+
+* aside 2 (cont. 4) coroutines: yield from for delegation
+In [171]: def delegator():
+             final_result = yield from running_averager()
+             print('final result' ,final_result)
+
+In [174]: delboy = delegator()
+
+In [176]: delboy.send(None)
+
+In [177]: for i in range(1, 6):
+              curr_ave = delboy.send(i)
+              print("curr_ave", curr_ave)
+   .....:
+curr_ave 1.0
+curr_ave 1.5
+curr_ave 2.0
+curr_ave 2.5
+curr_ave 3.0
+
+In [178]: delboy.send(None)
+final result (3.0, 5)
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call
+last)
+<ipython-input-178-8078465fdceb> in <module>()
+----> 1 delboy.send(None)
+
+
+
+
+
+
+* aside 2 (cont. 5) coroutines: further reading
+  - Generator Tricks for Systems Programmers -- David M. Beazley
+  http://www.dabeaz.com/generators/
+
+  - dabeaz on concurrency
+
+  - Fluent Python - chapter 16
+
+  - Effective Python - chapter 5 -- really nice example doing celluar automata
+    with coroutines
+
+
+* BACK TO OUR SERVER: using yield from in our server (server_1.3.py)
+** In fib_server() fib_handler():
+   move every the yield statements to the functions that they are
+   calling in the Loop class
+
+** and add a 'yield from' in front of the call to the loop method
+
+  - for example:
+
+  def fib_server(address):
+     <snip>
+     while True:
+         client, addr = yield from loop.sock_accept(sock) # BLOCKING I/O
+         <snip>
+  - and:
+
+   def sock_accept(self, sock):
+       # wait to read/hear from the socket
+       yield 'waiting_to_accept', sock
+       return sock.accept()
+
+   - be careful not to mix up 'client' and 'sock' variables
+
+** don't forget about the future:
+
+     result = yield from future # <-- !!!
+
+** now try it... what happens?
+         (problem with future... boo hoo)
+
+
+* (server_1.4.py) fixing the future:
+  - wrap the future with a coroutine:
+
+  from types import coroutine
+
+  @coroutine
+  def future_wait(future):
+     yield 'waiting_for_future', future
+     return future.result()
+
+  - and
+    result = yield from future_wait(future)
+
+  - try does it work... ?
+     well ish -- seems a bit buggy to me -->
+    sometimes long running processes seem to block...
+
+
+
+
+* (server_1.5.py) -- more coroutines:
+ - make coroutines for each of the yield statements that we have:
+
+@coroutine
+def write_wait(sock):
+    yield 'waiting_to_write', sock
+@coroutine
+def accept_wait(sock):
+    yield 'waiting_to_accept', sock
+@coroutine
+def read_wait(sock):
+    yield 'waiting_to_read', sock
+
+- and then in the loop methods change the yield statements to yield
+  from s these new coroutines, e.g.:
+
+      def sock_recv(self, sock, maxbytes):
+          # wait to read from the socket
+          yield from read_wait(sock)
+          return sock.recv(maxbytes)
+
+- this is still a bit buggy... ... but mostly it works on my
+  machine...
+
+
+* (server_1.6.py) - adding in async / await syntax
+  - these are the easiest changes:
+  - everywhere replace 'yield from' with 'await'
+  - and, every function that contains an 'await' change 'def' to
+    'async def'
+    (hopefully your text editor will support this... --> emacs wtw! )
+
+  - now try it! Pat yourself on the back you're using async /await
+    (welcome to the futures!)
+
+  - take a note of the number of requests per second (on my machine
+    it's ~1300 req/sec)
+
+* (server_1.7.py) asyncio
+
+  - add this:
+  import asyncio
+  # loop = Loop()
+  loop = asyncio.get_event_loop()
+
+  - remove / comment out the Loop class and the helper coroutine
+    functions.
+
+  - try it!
+
+  - our (buggy) event loop is faster than asyncio (1300 cf 1000
+    req/sec)!
+
+
+
+* conclusions
+  - thanks for staying the course!!!!! --> hope I have encouraged you
+    to dig in to these sort of topics (and then give a talk on it!)
+
+  - async is fun! (welcome back to the futures!)
+
+  - there is no silver bullet: you have to think about what you are
+    wanting to do; where and why it might block.
+
+  - DaBeaz: "async/await is a sort of API for async in Python"
+
+  - Python is a great language for this... (it's taken a while)
+
+  - Twisted is still great (will align itself with async/await) - it
+    has so many useful libs.
+
+  - go watch all of David Beazley's talks...
+
+  - check out curio and uvloop
+      https://github.com/dabeaz/curio
+      https://github.com/MagicStack/uvloop
+
+  - build your own (priorities for tasks... ) much fun and
+    edification to be had
